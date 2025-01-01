@@ -30,7 +30,7 @@ float floatMap(float x, float in_min, float in_max, float out_min, float out_max
 #define WIFI_PASSWORD "9CC8FC7734B0"
 
 // Insert Firebase project API Key
-#define API_KEY "AIzaSyC19dmmmmWnSyDrSgTtjwdyMqbRHhJzrhg"
+#define API_KEY ""
 
 
 // Insert RTDB URLefine the RTDB URL */
