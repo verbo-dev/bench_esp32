@@ -12,6 +12,15 @@
 #include <TimeLib.h>
 //to interface the current sensor
 #include <Adafruit_INA219.h>
+/*MACROS for debugging:
+define DEBUGGING_OFF if you want to test the whole program
+define "FEATURE"_DEBUGGING in order to just run a feature section in the program with some extra print lines
+you can define multiple FEATURE_DEBUGGING macros*/
+#define DEBUGGING_OFF
+#define POLLnCHARGE_DEBUGGING //Poll submits monitoring and charge control
+#define VOLTAGE_DEBUGGING //voltage and sensor processing
+#define BIGQ_DEBUGGING //sensor data publishing
+#define WIFI_DEBUGGING //to see how many times it lost connection
 
 // --- wi fi connection ----
 #define WIFI_SSID "INFINITUMEDA2_2.4"
@@ -19,6 +28,9 @@
 WiFiClient esp32Client; //object for MQTT
 bool wifi_begin(void);
 bool NO_WIFI_MODE = false;
+#ifdef WIFI_DEBUGGING
+  uint16_t no_wifi_mode_counter = 0;
+#endif
 
 
 // ---- firebase connection -----
@@ -73,8 +85,8 @@ float voltage_panel_filtered = 0.0;
 float filtering(float);
 #define RELAY_PIN 5
 //sensor voltaje:::::::::::::
-#define ANALOG_PIN_PANEL  36 // ESP32 pin GPIO36 (ADC0) connected to voltage sensor
-#define ANALOG_PIN_BATTERY 12
+#define ANALOG_PIN_PANEL 36
+#define ANALOG_PIN_BATTERY 34
 #define VOLTAGE_AVG_SIZE 5
 #define REF_VOLTAGE    3.3
 #define ADC_RESOLUTION 4096.0
@@ -115,7 +127,7 @@ int bigquery_publishing_timeout = BIGQUERY_PUBLISHING_t;
 void setup() {
   //SENSOR VOLTAJE::: 
    // set the ADC attenuation to 11 dB (up to ~3.3V input)
-  analogSetAttenuation(ADC_11db);
+  Serial.begin(115200);
   //:::::::::::::::::::::::::::
 
   // -------------------------------- CONNECTION TO WIFI ---------------------------------------------
@@ -124,24 +136,24 @@ void setup() {
 
   // ------------------------------ CONNECTION TO FIREBASE ----------------------------------------
 
-  if(NO_WIFI_MODE == false)
-  {
-    firebase_config();
-    Firebase.begin(&config, &auth);
-  }
+  #if defined(POLLnCHARGE_DEBUGGING) || defined(DEBUGGING_OFF)
+    if(NO_WIFI_MODE == false)
+    {
+      firebase_config();
+      Firebase.begin(&config, &auth);
+    }
+  #endif
   
   // ------------------------------CONNECTION TO BIG QUERY (MQTT)------------------------------------
-  if(NO_WIFI_MODE == false)
-  {
-    mqtt_connect();
-  }
-
+  #if defined(BIGQ_DEBUGGING) || defined(DEBUGGING_OFF)
+    if(NO_WIFI_MODE == false)
+    {
+      mqtt_connect();
+    }
+  #endif
   // initialize digital pin GPIO18 as an output.
   pinMode(RELAY_PIN, OUTPUT);
-  pinMode(ANALOG_PIN_BATTERY, INPUT);
-  pinMode(ANALOG_PIN_PANEL, INPUT);
-  Serial.begin(115200);
-
+  
   //for sensor data publishing to calculate date and time
   timeClient.begin();
   timeClient.setTimeOffset(-21600); //para llegar a una zona horaria GMT-6
@@ -157,40 +169,64 @@ void loop() {
 
 
   // ------ POLL SUBMITS MONITORING AND CHARGE CONTROL ------------
-  if ((Firebase.ready() && signupOK) && (NO_WIFI_MODE == false)) //if everything is ok in firebase
-  {
-    if(CargadorStatus == true)
+  #if defined(POLLnCHARGE_DEBUGGING) || defined(DEBUGGING_OFF)
+    if ((Firebase.ready() && signupOK) && (NO_WIFI_MODE == false)) //if everything is ok in firebase
     {
-      CargadorStatus = monitor_connection(); //check if the user is connected to the chargers using current sensor
-      if(CargadorStatus == false)
-      {
-        write_firebase(false); 
-        digitalWrite(RELAY_PIN, LOW); //turn off the chargers
-      }
-      
-    }
-    else
-    {
-      CargadorStatus = get_cargador_status(); //poll if the status changed from false
       if(CargadorStatus == true)
       {
-        user_charging = true; //for sensor data publishing to know that in this BIGQUERY_PUBLISHING time lapse somebody was connected
-        digitalWrite(RELAY_PIN, HIGH); //turn on the chargers
+        CargadorStatus = monitor_connection(); //check if the user is connected to the chargers using current sensor
+        if(CargadorStatus == false)
+        {
+          #ifdef POLLnCHARGE_DEBUGGING
+            Serial.println("DEBUG:writting a false to firebase and turning off chargers");
+          #endif
+          write_firebase(false); 
+          digitalWrite(RELAY_PIN, LOW); //turn off the chargers
+        }
+        
       }
-    }   
-  }
-  else if (NO_WIFI_MODE == true) //chargers will be always working if there is no internet
-  {
-    digitalWrite(RELAY_PIN, HIGH); 
-  }
+      else
+      {
+        CargadorStatus = get_cargador_status(); //poll if the status changed from false
+        #ifdef POLLnCHARGE_DEBUGGING
+          Serial.println("DEBUG:checking if somebody wants to connect");
+        #endif
+        if(CargadorStatus == true)
+        {
+          #ifdef POLLnCHARGE_DEBUGGING
+            Serial.println("somebody just connected his phone");
+          #endif
+          user_charging = true; //for sensor data publishing to know that in this BIGQUERY_PUBLISHING time lapse somebody was connected
+          digitalWrite(RELAY_PIN, HIGH); //turn on the chargers
+        }
+      }   
+    }
+    else if (NO_WIFI_MODE == true) //chargers will be always working if there is no internet
+    {
+      digitalWrite(RELAY_PIN, HIGH); 
+    }
+  #else
+    digitalWrite(RELAY_PIN, HIGH);
+  #endif
 
   // --------------- VOLTAGE AND SENSOR PROCESSING ----------------------------
+  #if defined(VOLTAGE_DEBUGGING) || defined(DEBUGGING_OFF)
+    voltage_battery = voltage_measuring(ANALOG_PIN_BATTERY);
+    //voltage_battery_filtered = filtering(voltage_battery);
 
-  voltage_battery = voltage_measuring(ANALOG_PIN_BATTERY);
-  //voltage_battery_filtered = filtering(voltage_battery);
 
-  voltage_panel = voltage_measuring(ANALOG_PIN_PANEL);
-  //voltage_panel_filtered = filtering(voltage_panel);
+    voltage_panel = voltage_measuring(ANALOG_PIN_PANEL);
+    //voltage_panel_filtered = filtering(voltage_panel);
+
+    #ifdef VOLTAGE_DEBUGGING
+      Serial.print("DEBUG:final panel voltage value ");
+      Serial.println(voltage_panel);
+      Serial.print("DEBUG:final battery voltage value ");
+      Serial.println(voltage_battery);
+      Serial.print("DEBUG:current value ");
+      Serial.println(current_calculation());
+    #endif
+  #endif
 
     // --------------- WIFI TROUBLESHOOTING --------------------------------------
   if(WiFi.status() != WL_CONNECTED) //check if the connection to internet is still stable 
@@ -198,38 +234,49 @@ void loop() {
     NO_WIFI_MODE = wifi_begin();
     if(NO_WIFI_MODE == false) //reconnect to everything if there is wifi connection again
     {
-      Firebase.begin(&config, &auth);
-      mqtt_connect(); //this function will BLOCK the program if connection with google remote computer is not succesfull
+      #if defined(POLLnCHARGE_DEBUGGING) || defined(DEBUGGING_OFF)
+        Firebase.begin(&config, &auth);
+      #endif
+      #if defined(BIGQ_DEBUGGING) || defined(DEBUGGING_OFF)
+        mqtt_connect(); //this function will BLOCK the program if connection with google remote computer is not succesfull
+      #endif
     }
   }
 
   // --------------- SENSOR DATA PUBLISHING --------------------------------------
+  #if defined(BIGQ_DEBUGGING) || defined(DEBUGGING_OFF)
+    bigquery_publishing_timeout = bigquery_publishing_timeout - 1;
 
-  bigquery_publishing_timeout = bigquery_publishing_timeout - 1;
+    #ifdef BIGQ_DEBUGGING
+      Serial.print("DEBUG:bigquery_publishing_timeout ");
+      Serial.println(bigquery_publishing_timeout);
+    #endif
+    if((bigquery_publishing_timeout == 0) && (NO_WIFI_MODE == false))
+    {
+      bigquery_publishing_timeout = BIGQUERY_PUBLISHING_t;
+        //prepare variables to be published on mqtt
+      String voltage_panel_filteredS = String(voltage_panel);
+      String voltage_battery_filteredS = String(voltage_battery);
 
-  if((bigquery_publishing_timeout == 0) && (NO_WIFI_MODE == false))
-  {
-    bigquery_publishing_timeout = BIGQUERY_PUBLISHING_t;
+      String DatatoPublish = voltage_panel_filteredS + "|" + voltage_battery_filteredS + "|" + clave_disp \
+                            + "|" + date_calculation() + "|" + time_calculation() + "|" + folio_calculation() \
+                            + "|" + usuario_cargando();
 
-    //prepare variables to be published on mqtt
-    String voltage_panel_filteredS = String(voltage_panel);
-    String voltage_battery_filteredS = String(voltage_battery);
-
-    String DatatoPublish = voltage_panel_filteredS + "|" + voltage_battery_filteredS + "|" + clave_disp \
-                           + "|" + date_calculation() + "|" + time_calculation() + "|" + folio_calculation() \
-                           + "|" + usuario_cargando();
-
-    //publish in mqtt 
-    mqttClient.publish(la_caldera_logger_t,DatatoPublish.c_str(),false); //retain set to false
-    Serial.println("publishing this data:" + DatatoPublish + "into topic:");
-    Serial.print(la_caldera_logger_t);
-    restart_voltage_filtering = true; //data will be filtered and averaged again after each publication
-  }
-  else if (NO_WIFI_MODE == true)
-  {
-    //logic to save the sensor data in a separate variable 
-  }
-
+      //publish in mqtt 
+      mqttClient.publish(la_caldera_logger_t,DatatoPublish.c_str(),false); //retain set to false
+      Serial.println("publishing this data:" + DatatoPublish + "into topic:");
+      #ifdef WIFI_DEBUGGING
+        Serial.print("DEBUG:no_wifi_mode_counter");
+        Serial.println(no_wifi_mode_counter);
+      #endif
+      Serial.print(la_caldera_logger_t);
+      restart_voltage_filtering = true; //data will be filtered and averaged again after each publication
+    }
+    else if (NO_WIFI_MODE == true)
+    {
+      //logic to save the sensor data in a separate variable 
+    }
+  #endif
   delay(GLOBAL_VOID_LOOP_DELAY);
 }
 
@@ -250,6 +297,10 @@ bool wifi_begin(void)
   {
     Serial.println();
     Serial.print("WIFI connection ERROR");
+    #ifdef WIFI_DEBUGGING
+      no_wifi_mode_counter++;
+      folio_accumulation = 0;
+    #endif
     return true; //NO_WIFI_MODE = true
   }
   Serial.println();
@@ -292,6 +343,12 @@ void mqtt_connect()
   mqttClient.setServer(server, port);
   mqttClient.setKeepAlive((BIGQUERY_PUBLISHING_t / 2)+10); // +10 just to have a gap for the keepalive
   mqttClient.setCallback(callback);
+
+  #ifdef BIGQ_DEBUGGING
+    Serial.println("DEBUG:MQTT connection parameters ");
+    Serial.println(server);
+    Serial.println((BIGQUERY_PUBLISHING_t / 2)+10);
+  #endif
   while (!mqttClient.connected()) {
     Serial.print("MQTT connection in progress...");
     String client = String(clave_disp);
@@ -340,7 +397,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
 
 float voltage_measuring(uint8_t analog_pin)
 {
-  //read the analog input
+    //read the analog input
   int adc_value = analogRead(analog_pin);
   // determine voltage at adc input
   float voltage_adc = ((float)adc_value * REF_VOLTAGE) / ADC_RESOLUTION;
@@ -349,11 +406,20 @@ float voltage_measuring(uint8_t analog_pin)
 
   if(analog_pin == ANALOG_PIN_BATTERY)
   {
+    #ifdef VOLTAGE_DEBUGGING
+      Serial.print("DEBUG:counts recieved for battery ");
+      Serial.println(adc_value);
+    #endif
+
     return voltage;
   }
+
+  #ifdef VOLTAGE_DEBUGGING
+    Serial.print("DEBUG:counts recieved for panel ");
+    Serial.println(adc_value);
+  #endif
   //Voltage measuring from panel has an extra voltage divider
   return (voltage * (R1_PCB + R2_PCB)) / R2_PCB;
-
 }
 
 bool get_cargador_status(void)
@@ -380,6 +446,13 @@ bool get_cargador_status(void)
 bool monitor_connection(void)
 {
   float current_value = current_calculation();
+
+  #ifdef POLLnCHARGE_DEBUGGING
+    Serial.print("DEBUG:current value ");
+    Serial.println(current_value);
+    Serial.print("DEBUG:NO_USERS_CHARGING_THRESHOLDVAL ");
+    Serial.println(user_not_charging_timeout);
+  #endif
 
   if(current_value <= NO_USERS_CHARGING_THRESHOLDVAL) //when there are no cellphones connected to the chargers
   {

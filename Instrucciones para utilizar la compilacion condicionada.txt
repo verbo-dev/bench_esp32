@@ -1,0 +1,37 @@
+Instrucciones para utilizar la compilación condicionada
+
+¿Por qué usarla?
+Usando macros ("#define ...") hay cierto tipo de ifs (#ifdef ...) que solamente cuando existe
+la definición por macro del término (en este caso "...") va a entrar en ese if. Sin embargo 
+entra en ese if no en el momento de que el programa corre, si no que cuando estás compilando 
+el código el if determina si esa parte del programa se carga o no.
+
+Esto nos va a ayudar a hacer pruebas de solo cierta parte del código en la que nos queremos 
+enfocar a probar
+
+existen 5 macros hasta ahora que se utilizan para esto:
+#define DEBUGGING_OFF
+#define POLLnCHARGE_DEBUGGING //Poll submits monitoring and charge control
+#define VOLTAGE_DEBUGGING //voltage and sensor processing
+#define BIGQ_DEBUGGING //sensor data publishing
+#define WIFI_DEBUGGING //to see how many times it lost connection
+
+todas estas macros delimitan una parte del código que se encarga a lo siguiente:
+
+POLLnCHARGE_DEBUGGING se encarga de checar si los usuarios se conectaron a la banca, si ya contestaron la
+encuesta y en qué momento se desconectan de ella
+
+VOLTAGE_DEBUGGING solamente lee los sensores de voltaje
+
+BIGQ_DEBUGGING toda la preparación de la fecha, el folio, dar formato a las cosas para después ser mandadas por
+medio de MQTT a BigQuery
+
+WIFI_DEBUGGING solo ando experimentando con estas
+
+¿Cómo usarlas?
+
+solamente deja descomentada la macro de la sección que quieras probar
+en caso de que quieras probar todo el código entonces solo deja descomentada la macro de DEBUGGING_OFF
+
+nota: todas las macros con excepción de DEBUGGING_OFF imprimen cosas extra via el monitor serial
+
