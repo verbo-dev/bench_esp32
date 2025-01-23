@@ -16,11 +16,11 @@
 define DEBUGGING_OFF if you want to test the whole program
 define "FEATURE"_DEBUGGING in order to just run a feature section in the program with some extra print lines
 you can define multiple FEATURE_DEBUGGING macros*/
-#define DEBUGGING_OFF
-#define POLLnCHARGE_DEBUGGING //Poll submits monitoring and charge control
+//#define DEBUGGING_OFF
+//#define POLLnCHARGE_DEBUGGING //Poll submits monitoring and charge control
 #define VOLTAGE_DEBUGGING //voltage and sensor processing
 #define BIGQ_DEBUGGING //sensor data publishing
-#define WIFI_DEBUGGING //to see how many times it lost connection
+//#define WIFI_DEBUGGING //to see how many times it lost connection
 
 // --- wi fi connection ----
 #define WIFI_SSID "INFINITUMEDA2_2.4"
@@ -57,7 +57,7 @@ void mqtt_connect(void);
 void callback(char*, byte*, unsigned int);
 
 //for callback function
-int var;
+int var = 0;
 String resultS = "";
 
 // ----- poll submits monitoring and charge control variables -----
@@ -74,7 +74,7 @@ Adafruit_INA219 ina219;
 #define NO_WIFI_MODE_ACTIVATION_t 83 // NO_WIFI_MODE_ACTIVATION = NO_WIFI_MODE_ACTIVATION_t * internal function delay
 #define BIGQUERY_PUBLISHING_t 720 //BIGQUERY_PUBLISHING = BIGQUERY_PUBLISHING_t (in seconds) / global void loop delay (in seconds)
 #define USER_NOT_CHARGING_TIMEOUT_t 40 //USER_NOT_CHARGING_TIMEOUT = USER_NOT_CHARGING_TIMEOUT_t * global void loop delay
-#define GLOBAL_VOID_LOOP_DELAY 500 //ms 
+#define GLOBAL_VOID_LOOP_DELAY 300 //ms 
 
 
 // ------ voltage and sensor processing variables -------------
@@ -260,7 +260,7 @@ void loop() {
 
       String DatatoPublish = voltage_panel_filteredS + "|" + voltage_battery_filteredS + "|" + clave_disp \
                             + "|" + date_calculation() + "|" + time_calculation() + "|" + folio_calculation() \
-                            + "|" + usuario_cargando();
+                            + "|" + usuario_cargando() + "|."; //added the last string for sesion id
 
       //publish in mqtt 
       mqttClient.publish(la_caldera_logger_t,DatatoPublish.c_str(),false); //retain set to false
@@ -385,12 +385,13 @@ void callback(char* topic, byte* payload, unsigned int length) {
   
   var = resultI;
 
-  resultS = "";
+  /*resultS = "";
   
-  /*for (int i=0;i<length;i++) {
+  for (int i=0;i<length;i++) {
     resultS= resultS + (char)payload[i];
   }
-  Serial.println(resultS);*/
+  Serial.println(resultS);
+  */
 }
 
 // ------------------------- SENSOR PROCESSING AND POLL SUBMITS MONITORING FUNCTIONS ----------------------
