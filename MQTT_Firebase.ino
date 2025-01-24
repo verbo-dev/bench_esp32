@@ -148,6 +148,15 @@ void setup() {
   #if defined(BIGQ_DEBUGGING) || defined(DEBUGGING_OFF)
     if(NO_WIFI_MODE == false)
     {
+      mqttClient.setServer(server, port);
+      mqttClient.setKeepAlive((BIGQUERY_PUBLISHING_t / 2)+10); // +10 just to have a gap for the keepalive
+      mqttClient.setCallback(callback);
+      #ifdef BIGQ_DEBUGGING
+        Serial.println("DEBUG:MQTT connection parameters ");
+        Serial.println(server);
+        Serial.println((BIGQUERY_PUBLISHING_t / 2)+10);
+      #endif
+
       mqtt_connect();
     }
   #endif
@@ -238,6 +247,7 @@ void loop() {
         Firebase.begin(&config, &auth);
       #endif
       #if defined(BIGQ_DEBUGGING) || defined(DEBUGGING_OFF)
+      if (!mqttClient.connected())
         mqtt_connect(); //this function will BLOCK the program if connection with google remote computer is not succesfull
       #endif
     }
@@ -276,6 +286,10 @@ void loop() {
     {
       //logic to save the sensor data in a separate variable 
     }
+  #endif
+  #if defined(BIGQ_DEBUGGING) || defined(DEBUGGING_OFF)
+    //maintain alive the connection and poll for more incoming messages
+    mqttClient.loop();
   #endif
   delay(GLOBAL_VOID_LOOP_DELAY);
 }
@@ -340,15 +354,6 @@ void tokenStatusCallback(String result)
 
 void mqtt_connect() 
 {
-  mqttClient.setServer(server, port);
-  mqttClient.setKeepAlive((BIGQUERY_PUBLISHING_t / 2)+10); // +10 just to have a gap for the keepalive
-  mqttClient.setCallback(callback);
-
-  #ifdef BIGQ_DEBUGGING
-    Serial.println("DEBUG:MQTT connection parameters ");
-    Serial.println(server);
-    Serial.println((BIGQUERY_PUBLISHING_t / 2)+10);
-  #endif
   while (!mqttClient.connected()) {
     Serial.print("MQTT connection in progress...");
     String client = String(clave_disp);
