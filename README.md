@@ -38,19 +38,21 @@ Pseudocódigo
 
 Overview
 Lee del servidor de firebase si alguien ya contestó la encuesta para así activar los cargadores. De igual manera checa si todos los 
-usuarios ya desconectaron su celular de la banca para desactivar los cargadores de nuevo y avsarle a firebase que se apagaron, también 
-controla el valor de lo que se va a publicar en el campo de usuario_cargando en big query
+usuarios ya desconectaron su celular de la banca para desactivar los cargadores de nuevo (dependiendo del timer que indique firebase) 
+y avisarle a firebase que se apagaron, también controla el valor de lo que se va a publicar en el campo de usuario_cargando en big query
 
 Pseudocódigo
 0. Se verifica que no se esté en NO_WIFI_MODE, si sí lo está entonces se dejan los cargadores encendidos, de lo contrario sigue la lógica de abajo:
+0.5 Se checa el modo de operar que indica firebase, si es modo desarrollo se dejan los cargadores encendidos, de lo contrario se sigue la lógica de abajo
+0.75 Se checa el sensortimer que se escribió en firebase
 1. En caso de que haya un usuario ya cargándose:
 	1.1 Se verifica que todavía está conectado, usando los sensores de corriente y checando si USER_NOT_CHARGING_TIMEOUT ya expiró
-	1.2 En caso de que ya se haya desconectado el usuario, se escribe en firebase y se deshabilitan los cargadores
+	1.2 En caso de que ya se haya desconectado el usuario, se escribe en firebase junto con la hora de fin de sesión y se deshabilitan los cargadores
 		(no se escribe en usuario_cargando en big query porque el objetivo es saber si alguien cargó al menos un ratito antes
 		de que se vuelva a publicar en big query. En caso de que se pusiera en false se perdería ese true)
 2. En caso de que no haya ningún usuario ya cargándose:
 	2.1 Se lee si alguien ya contestó la encuesta en firebase
-	2.2 En caso de que alguien la haya contestado, se escribe en usuario_cargando en big query y se encienden los cargadores
+	2.2 En caso de que alguien la haya contestado, se escribe en usuario_cargando en big query y se encienden los cargadores, además se avisa a sensor data 	    publishing que hay que mandar los datos de inmediato junto con el sesión id
 
 
  ----------------------- Voltage and sensor processing ---------------------------------------
@@ -86,13 +88,14 @@ Preparación de los datos para ser mandados al servidor MQTT y que el servidor l
 
 Pseudocódigo
 0. Se verifica que no esté en NO_WIFI_MODE, si sí lo está se salta toda la lógica 
-1. Si ya pasó el tiempo definido en BIGQUERY_PUBLISHING empieza a ejecutar la siguiente lógica:
+1. Si ya pasó el tiempo definido en BIGQUERY_PUBLISHING o poll sumbits monitoring paso 2.2 indica empieza a ejecutar la siguiente lógica:
 2. Se reinicia el countdown de BIGQUERY_PUBLISHING
 3. Se les da el formato adecuado a las variables de voltaje para que puedan ser mandadas
 4. Se hace el cálculo de la hora 
 5. Se hace el cálculo de la fecha
 6. Se hace el cálculo del folio
 7. Se hace la lectura de usuario_cargando
+7.5 Se lee el sesión id
 8. Se publican todos los datos en bigquery
 9. Se pone en "false" la variable de usuario_cargando
 
