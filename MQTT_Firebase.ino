@@ -1,10 +1,17 @@
-#include <Arduino.h>
+/*MACROS for debugging:
+define DEBUGGING_OFF if you want to test the whole program
+define "FEATURE"_DEBUGGING in order to just run a feature section in the program with some extra print lines
+you can define multiple FEATURE_DEBUGGING macros*/
+#define DEBUGGING_OFF
+//#define POLLnCHARGE_DEBUGGING //Poll submits monitoring and charge control
+//#define VOLTAGE_DEBUGGING //voltage and sensor processing
+//#define BIGQ_DEBUGGING //sensor data publishing
 
+
+#include <Arduino.h>
 #include <WiFi.h>
 //firebase libraries
-#include <Firebase_ESP_Client.h>
-#include "addons/TokenHelper.h"
-#include "addons/RTDBHelper.h"
+#include <FirebaseESP32.h>
 //big query (MQTT connection) libraries
 #include <PubSubClient.h>
 //time calculation libraries 
@@ -12,15 +19,6 @@
 #include <TimeLib.h>
 //to interface the current sensor
 #include <Adafruit_INA219.h>
-/*MACROS for debugging:
-define DEBUGGING_OFF if you want to test the whole program
-define "FEATURE"_DEBUGGING in order to just run a feature section in the program with some extra print lines
-you can define multiple FEATURE_DEBUGGING macros*/
-//#define DEBUGGING_OFF
-//#define POLLnCHARGE_DEBUGGING //Poll submits monitoring and charge control
-#define VOLTAGE_DEBUGGING //voltage and sensor processing
-#define BIGQ_DEBUGGING //sensor data publishing
-//#define WIFI_DEBUGGING //to see how many times it lost connection
 
 // --- wi fi connection ----
 #define WIFI_SSID "INFINITUMEDA2_2.4"
@@ -28,23 +26,19 @@ you can define multiple FEATURE_DEBUGGING macros*/
 WiFiClient esp32Client; //object for MQTT
 bool wifi_begin(void);
 bool NO_WIFI_MODE = false;
-#ifdef WIFI_DEBUGGING
-  uint16_t no_wifi_mode_counter = 0;
-#endif
+
 
 
 // ---- firebase connection -----
 // Insert Firebase project API Key
-#define API_KEY "AIzaSyC19dmmmmWnSyDrSgTtjwdyMqbRHhJzrhg"
+#define API_KEY "VtEm9kyvlhFnYa5spqfCnIKHopUKIBMvVraGvuCH"
 // Insert RTDB URLefine the RTDB URL */
-#define DATABASE_URL "https://bench-verbo-default-rtdb.firebaseio.com/"
+#define DATABASE_URL "https://verbo-app-1e648-default-rtdb.firebaseio.com/"
 //Define Firebase Data object
 FirebaseData fbdo;
 FirebaseAuth auth;
 FirebaseConfig config;
 void firebase_config(void);
-//token generation callback function
-void tokenStatusCallback(String); 
 
 
 // ---- Big Query (MQTT connection) -----------
@@ -65,16 +59,19 @@ bool signupOK = false;
 bool get_cargador_status(void); //read from firebase 
 bool CargadorStatus = false;
 bool monitor_connection(void);
-void write_firebase(bool);
+void end_sessionFb(void);
 bool user_charging = false;
 //current sensor object
 Adafruit_INA219 ina219;
+void loadConfigFromFirebase(void);
+String currentSessionId = "";
+void ping_Fb(void);
 
 // ----- general timers -----------
 #define NO_WIFI_MODE_ACTIVATION_t 83 // NO_WIFI_MODE_ACTIVATION = NO_WIFI_MODE_ACTIVATION_t * internal function delay
 #define BIGQUERY_PUBLISHING_t 720 //BIGQUERY_PUBLISHING = BIGQUERY_PUBLISHING_t (in seconds) / global void loop delay (in seconds)
-#define USER_NOT_CHARGING_TIMEOUT_t 40 //USER_NOT_CHARGING_TIMEOUT = USER_NOT_CHARGING_TIMEOUT_t * global void loop delay
-#define GLOBAL_VOID_LOOP_DELAY 300 //ms 
+uint8_t USER_NOT_CHARGING_TIMEOUT_t = 0; //USER_NOT_CHARGING_TIMEOUT = USER_NOT_CHARGING_TIMEOUT_t * global void loop delay
+#define GLOBAL_VOID_LOOP_DELAY 500 //ms 
 
 
 // ------ voltage and sensor processing variables -------------
@@ -140,7 +137,6 @@ void setup() {
     if(NO_WIFI_MODE == false)
     {
       firebase_config();
-      Firebase.begin(&config, &auth);
     }
   #endif
   
@@ -189,7 +185,7 @@ void loop() {
           #ifdef POLLnCHARGE_DEBUGGING
             Serial.println("DEBUG:writting a false to firebase and turning off chargers");
           #endif
-          write_firebase(false); 
+          end_sessionFb(); 
           digitalWrite(RELAY_PIN, LOW); //turn off the chargers
         }
         
@@ -203,14 +199,14 @@ void loop() {
         if(CargadorStatus == true)
         {
           #ifdef POLLnCHARGE_DEBUGGING
-            Serial.println("somebody just connected his phone");
+            Serial.println("DEBUG:somebody just connected his phone");
           #endif
           user_charging = true; //for sensor data publishing to know that in this BIGQUERY_PUBLISHING time lapse somebody was connected
           digitalWrite(RELAY_PIN, HIGH); //turn on the chargers
         }
       }   
     }
-    else if (NO_WIFI_MODE == true) //chargers will be always working if there is no internet
+    else //chargers will be always working if there is no internet, no firebase connection or firebase says that we are in developer mode
     {
       digitalWrite(RELAY_PIN, HIGH); 
     }
@@ -244,7 +240,7 @@ void loop() {
     if(NO_WIFI_MODE == false) //reconnect to everything if there is wifi connection again
     {
       #if defined(POLLnCHARGE_DEBUGGING) || defined(DEBUGGING_OFF)
-        Firebase.begin(&config, &auth);
+        firebase_config();
       #endif
       #if defined(BIGQ_DEBUGGING) || defined(DEBUGGING_OFF)
       if (!mqttClient.connected())
@@ -261,7 +257,9 @@ void loop() {
       Serial.print("DEBUG:bigquery_publishing_timeout ");
       Serial.println(bigquery_publishing_timeout);
     #endif
-    if((bigquery_publishing_timeout == 0) && (NO_WIFI_MODE == false))
+
+    //data will be published only if timer expired or somebody just answered the poll
+    if(((bigquery_publishing_timeout == 0) && (NO_WIFI_MODE == false)) || (user_charging == true))
     {
       bigquery_publishing_timeout = BIGQUERY_PUBLISHING_t;
         //prepare variables to be published on mqtt
@@ -270,17 +268,12 @@ void loop() {
 
       String DatatoPublish = voltage_panel_filteredS + "|" + voltage_battery_filteredS + "|" + clave_disp \
                             + "|" + date_calculation() + "|" + time_calculation() + "|" + folio_calculation() \
-                            + "|" + usuario_cargando() + "|."; //added the last string for sesion id
+                            + "|" + usuario_cargando() + "|" + get_sID(); //added the last string for sesion id
 
       //publish in mqtt 
       mqttClient.publish(la_caldera_logger_t,DatatoPublish.c_str(),false); //retain set to false
       Serial.println("publishing this data:" + DatatoPublish + "into topic:");
-      #ifdef WIFI_DEBUGGING
-        Serial.print("DEBUG:no_wifi_mode_counter");
-        Serial.println(no_wifi_mode_counter);
-      #endif
       Serial.print(la_caldera_logger_t);
-      restart_voltage_filtering = true; //data will be filtered and averaged again after each publication
     }
     else if (NO_WIFI_MODE == true)
     {
@@ -290,6 +283,9 @@ void loop() {
   #if defined(BIGQ_DEBUGGING) || defined(DEBUGGING_OFF)
     //maintain alive the connection and poll for more incoming messages
     mqttClient.loop();
+  #endif
+  #if defined(POLLnCHARGE_DEBUGGING) || defined(DEBUGGING_OFF)
+    ping_Fb();
   #endif
   delay(GLOBAL_VOID_LOOP_DELAY);
 }
@@ -311,10 +307,6 @@ bool wifi_begin(void)
   {
     Serial.println();
     Serial.print("WIFI connection ERROR");
-    #ifdef WIFI_DEBUGGING
-      no_wifi_mode_counter++;
-      folio_accumulation = 0;
-    #endif
     return true; //NO_WIFI_MODE = true
   }
   Serial.println();
@@ -328,28 +320,17 @@ bool wifi_begin(void)
 void firebase_config(void)
 {
     /* Assign the api key (required) */
-  config.api_key = API_KEY;
+  config.signer.tokens.legacy_token = API_KEY;
 
   /* Assign the RTDB URL (required) */
-  config.database_url = DATABASE_URL;
+  config.host = DATABASE_URL;
 
   /* Sign up */
-  if (Firebase.signUp(&config, &auth, "", "")){
-    Serial.println("Firebase signup successfull");
-    signupOK = true;
-  }
-  else{
-    Serial.printf("%s\n", config.signer.signupError.message.c_str());
-  }
-
-  /* Assign the callback function for the long running token generation task */
-  config.token_status_callback = tokenStatusCallback; //see addons/TokenHelper.h
-}
-
-//token generation callback function
-void tokenStatusCallback(String result) 
-{ 
-    Serial.println("Token status: " + result); 
+  Firebase.begin(&config, &auth);
+  signupOK = true;
+  fbdo.setBSSLBufferSize(2048, 512);
+  fbdo.setResponseSize(2048);
+  loadConfigFromFirebase();
 }
 
 void mqtt_connect() 
@@ -401,6 +382,26 @@ void callback(char* topic, byte* payload, unsigned int length) {
 
 // ------------------------- SENSOR PROCESSING AND POLL SUBMITS MONITORING FUNCTIONS ----------------------
 
+// read the USER_NOT_CHARGING_TIMEOUT written in firebase
+void loadConfigFromFirebase() {
+  String path = "/benches/" + String(clave_disp) + "/config";
+  if (Firebase.getJSON(fbdo, path)) {
+    FirebaseJson json = fbdo.jsonObject();
+    FirebaseJsonData fbdoJSON;
+    int sensorTimeout;
+    if (json.get(fbdoJSON, "sensorTimeoutDuration") && fbdoJSON.type == "int") {
+      //data from firebase is sent in seconds
+      USER_NOT_CHARGING_TIMEOUT_t = (fbdoJSON.intValue * 1000) / GLOBAL_VOID_LOOP_DELAY; 
+    }
+    Serial.println("Configurable timers loaded");
+  } else {
+    Serial.println("Firebase configuration error, setting default timer");
+    USER_NOT_CHARGING_TIMEOUT_t = 60;
+    Serial.println(fbdo.errorReason());
+  }
+}
+
+
 float voltage_measuring(uint8_t analog_pin)
 {
     //read the analog input
@@ -428,27 +429,22 @@ float voltage_measuring(uint8_t analog_pin)
   return (voltage * (R1_PCB + R2_PCB)) / R2_PCB;
 }
 
+//read if /activeSession topic in firebase has some string data
 bool get_cargador_status(void)
 {
   bool CargadorStatus = false;
-  if(Firebase.RTDB.getBool(&fbdo,"/Cargador/activado"))
+  if (Firebase.getString(fbdo, "/benches/" + String(clave_disp) + "/activeSession"))
   {
-    if(fbdo.dataType()== "boolean")
-    {
-      CargadorStatus = fbdo.boolData();
-      Serial.println("Successful READ from " + fbdo.dataPath() + ": " + CargadorStatus + " (" + fbdo.dataType() + ")");
-      return CargadorStatus;
-    }
-  
-    else
-    {
-      Serial.println("FAILED: " + fbdo.errorReason());
-      CargadorStatus = false; 
-      return CargadorStatus;
-    }
+    currentSessionId = fbdo.stringData();
+    #ifdef POLLnCHARGE_DEBUGGING
+      Serial.println("DEBUG:active session recieved");
+    #endif
+    return true;
   } 
+  return false;
 }
 
+//check if there are cellphones connected 
 bool monitor_connection(void)
 {
   float current_value = current_calculation();
@@ -481,17 +477,16 @@ float current_calculation(void)
   return ina219.getCurrent_mA();
 }
 
-void write_firebase(bool state)
+//let know firebase that there is no one charging and register the time when that user stopped charging
+void end_sessionFb(void)
 {
-  if (Firebase.RTDB.setInt(&fbdo, "/Cargador/activado", state))
-  {
-    Serial.print(" - succesfully saved to: " + fbdo.dataPath());
-    Serial.println(" (" + fbdo.dataType()+ ") ");
-  }
-  else 
-  {
-    Serial.println("FAILED" + fbdo.errorReason());
-  }
+  String endTimePath = "/sessions/" + currentSessionId + "/endTime";
+  String activeSessionPath = "/benches/" + String(clave_disp) + "/activeSession";
+
+  Firebase.setString(fbdo, endTimePath, time_calculation());
+  Firebase.setString(fbdo, activeSessionPath, "null");
+
+  currentSessionId = "";
 }
 
 /*In order to send correct data to bigquery the technique to filter the trash data is:
@@ -585,4 +580,29 @@ String usuario_cargando (void)
                         /* restart this variable so that POLL SUBMITS MONITORING AND CHARGE CONTROL 
                               writes it again in true if somebody connected his phone before next data publish*/
   return usuario_cargando_;
+}
+
+String get_sID(void)
+{
+  return currentSessionId;
+  //develop the code that reads from firebase the session id and return it in string "session123", not all the path
+  //fbdo is the object name in this code that has the reading from firebase methods "fbdo.boolData()" for example, it replaced firebaseData of your other code 
+}
+
+//keep alive the connection with firebase 
+void ping_Fb(void)
+{
+  uint8_t feedback = 0;
+  String path = "/benches/" + String(clave_disp) + "/lastConnection";
+  String currentTime = time_calculation();
+  feedback = Firebase.setString(fbdo, path, currentTime);
+
+  #ifdef POLLnCHARGE_DEBUGGING
+    if (feedback) {
+      Serial.println("DEBUG:Ping correctly written");
+    } else {
+      Serial.println("DEBUG:Error while doing a ping to firebase:");
+      Serial.println(firebaseData.errorReason());
+    }
+  #endif
 }
