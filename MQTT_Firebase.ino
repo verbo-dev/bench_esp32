@@ -3,7 +3,7 @@ define DEBUGGING_OFF if you want to test the whole program
 define "FEATURE"_DEBUGGING in order to just run a feature section in the program with some extra print lines
 you can define multiple FEATURE_DEBUGGING macros*/
 #define DEBUGGING_OFF
-//#define POLLnCHARGE_DEBUGGING //Poll submits monitoring and charge control
+#define POLLnCHARGE_DEBUGGING //Poll submits monitoring and charge control
 //#define VOLTAGE_DEBUGGING //voltage and sensor processing
 //#define BIGQ_DEBUGGING //sensor data publishing
 
@@ -94,7 +94,7 @@ float filtering(float);
 
 float voltage_measuring(uint8_t);
 float current_calculation(void);
-#define NO_USERS_CHARGING_THRESHOLDVAL 400.0
+#define NO_USERS_CHARGING_THRESHOLDVAL 300.0
 uint8_t user_not_charging_timeout = USER_NOT_CHARGING_TIMEOUT_t;
 bool restart_voltage_filtering = false;
 float vpanel_avg[VOLTAGE_AVG_SIZE];
@@ -158,7 +158,7 @@ void setup() {
   #endif
   // initialize digital pin GPIO18 as an output.
   pinMode(RELAY_PIN, OUTPUT);
-  
+  digitalWrite(RELAY_PIN, LOW); //turn off the chargers
   //for sensor data publishing to calculate date and time
   timeClient.begin();
   timeClient.setTimeOffset(-21600); //para llegar a una zona horaria GMT-6
@@ -436,10 +436,12 @@ bool get_cargador_status(void)
   if (Firebase.getString(fbdo, "/benches/" + String(clave_disp) + "/activeSession"))
   {
     currentSessionId = fbdo.stringData();
+    if(currentSessionId != "null")
+    return true;
     #ifdef POLLnCHARGE_DEBUGGING
       Serial.println("DEBUG:active session recieved");
+      Serial.println(currentSessionId);
     #endif
-    return true;
   } 
   return false;
 }
@@ -485,6 +487,12 @@ void end_sessionFb(void)
 
   Firebase.setString(fbdo, endTimePath, time_calculation());
   Firebase.setString(fbdo, activeSessionPath, "null");
+
+  delay(1000);
+  #ifdef POLLnCHARGE_DEBUGGING
+   Serial.println("session errasen, null should be recieved:");
+   Serial.print(Firebase.getString(fbdo, "/benches/" + String(clave_disp) + "/activeSession"));
+  #endif
 
   currentSessionId = "";
 }
@@ -602,7 +610,7 @@ void ping_Fb(void)
       Serial.println("DEBUG:Ping correctly written");
     } else {
       Serial.println("DEBUG:Error while doing a ping to firebase:");
-      Serial.println(firebaseData.errorReason());
+      Serial.println(fbdo.errorReason());
     }
   #endif
 }
