@@ -1,0 +1,44 @@
+PSEUDOCODIGO
+
+1. #google cloud initial parameters
+
+se crea el objeto publicador proveniente de la librería de Google que nos va a dar conexión con 
+el servicio Pub/Sub. Se asigna el Project id, el Project es el espacio donde viven todas nuestras herramientas de
+Google
+
+2. #mqtt initial parameters
+
+se crea el cliente mqtt a partir de la librería paho. El client id por el momento es irrelevante 
+se asigna la callback function que va a estar utilizando el método loop.start() para hacer un poll de los mensajes
+constante
+se conecta al puerto mqtt 1883
+se suscribe al cliente por siempre ya que usamos la nomenclatura client/+ y eso nos permite suscribirnos a 
+todo lo que empiece por client. De igual manera hay dos topics constantes a las que nos tenemos que suscribir porque son tablas que se comparten 
+entre todos los clientes: clientes y dispositivos
+
+MAIN
+
+1. Se declara last message buffer y se le asigna un valor de null, que es igual al de message buffer para que se
+cumpla la primera condición que nos va a meter en un loop de checar si el message buffer ya es distinto al 
+ultimo para que se publique lo que nos llegó desde mqtt
+
+una vez que llega un nuevo mensaje se tiene seccionado en 2: el topic y el payload del mensaje
+el topic nos va a servir para ver en qué topic de Google pub/sub se va a publicar y el mensaje es lo que 
+se publica al topic, cada topic tiene su suscriber y es por bench, no por lugar.
+cada vez que llega un mensaje desde cada dispositivo se tiene que transformar a un formato json a través de los métodos
+de la clase, el método nos regresa el mensaje en json y ahora si se publica
+	
+	#first message that is published is bench id
+	solo se tiene que esperar una vez a que se mande este mensaje a través del topic "dispositivos", se le da 
+	el formato json con un método específico para esa clase y se publica con el método genérico de publish
+
+	#second message published id of the client
+	mismo proceso que el first message pero a través del topic "clientes", igual tiene su método específico para
+	el formato json y se publica de manera genérica. Un paréntesis es que como esta linea de la tabla solo se tiene que
+	llenar una vez por cliente entonces no todos los dispositivos tienen que mandar este mensaje ya que un cliente puede 
+	tener muchos dispositivos. Todavía está pendiente la implementación para que si no se manda se pase al tercer mensaje
+	y se publique en la tabla de los sensores
+
+	#logger data
+	mismo proceso, método para dar formato específico, Publisher genérico pero en este caso se va a quedar ciclado para siempre 
+	ya que esta información se monitorea cada 5 minutos
