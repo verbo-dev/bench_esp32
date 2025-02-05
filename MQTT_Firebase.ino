@@ -24,6 +24,9 @@ you can define multiple FEATURE_DEBUGGING macros*/
 // --- wi fi connection ----
 #define WIFI_SSID "Totalplay-A4AF"
 #define WIFI_PASSWORD "A4AF1555X5gFgtAR"
+//wifi backup
+#define WIFI_SSID_backup "TP LINK ARRIBA"
+#define WIFI_PASSWORD_backup "Lamadrid8"
 WiFiClient esp32Client; //object for MQTT
 bool wifi_begin(void);
 bool NO_WIFI_MODE = false;
@@ -314,10 +317,25 @@ bool wifi_begin(void)
 
   if(wifi_timeout == 0) //if after x seconds the wifi is not connected
   {
+    wifi_timeout = NO_WIFI_MODE_ACTIVATION_t;
+    WiFi.begin(WIFI_SSID_backup, WIFI_PASSWORD_backup);
+    Serial.print("Connecting to Wi-Fi backup");
+    while ((WiFi.status() != WL_CONNECTED) && (wifi_timeout != 0))
+    {
+      Serial.print(".");
+      delay(300);
+      wifi_timeout = wifi_timeout - 1;
+    }
+
+  }
+
+  if(wifi_timeout == 0)
+  {
     Serial.println();
     Serial.print("WIFI connection ERROR");
     return true; //NO_WIFI_MODE = true
   }
+
   Serial.println();
   Serial.print("Connected with IP: ");
   Serial.println(WiFi.localIP());
