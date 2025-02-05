@@ -3,9 +3,10 @@ define DEBUGGING_OFF if you want to test the whole program
 define "FEATURE"_DEBUGGING in order to just run a feature section in the program with some extra print lines
 you can define multiple FEATURE_DEBUGGING macros*/
 #define DEBUGGING_OFF
-#define POLLnCHARGE_DEBUGGING //Poll submits monitoring and charge control
+//#define POLLnCHARGE_DEBUGGING //Poll submits monitoring and charge control
 //#define VOLTAGE_DEBUGGING //voltage and sensor processing
 //#define BIGQ_DEBUGGING //sensor data publishing
+#define MQTT_DEBUGGING //publish data in a debug topic to debug remotely
 
 
 #include <Arduino.h>
@@ -21,8 +22,8 @@ you can define multiple FEATURE_DEBUGGING macros*/
 #include <Adafruit_INA219.h>
 
 // --- wi fi connection ----
-#define WIFI_SSID "INFINITUMEDA2_2.4"
-#define WIFI_PASSWORD "5JRCfA5n5Z"
+#define WIFI_SSID "Totalplay-A4AF"
+#define WIFI_PASSWORD "A4AF1555X5gFgtAR"
 WiFiClient esp32Client; //object for MQTT
 bool wifi_begin(void);
 bool NO_WIFI_MODE = false;
@@ -257,6 +258,11 @@ void loop() {
       Serial.print("DEBUG:bigquery_publishing_timeout ");
       Serial.println(bigquery_publishing_timeout);
     #endif
+    #ifdef MQTT_DEBUGGING
+      String bigquery_timeout_string = String(bigquery_publishing_timeout);
+      String debug_publish = "bigquery_publishing_timeout" + bigquery_timeout_string;
+      mqttClient.publish("debugging",debug_publish.c_str(),false); //retain set to false
+    #endif
 
     //data will be published only if timer expired or somebody just answered the poll
     if(((bigquery_publishing_timeout == 0) && (NO_WIFI_MODE == false)) || (user_charging == true))
@@ -272,6 +278,9 @@ void loop() {
 
       //publish in mqtt 
       mqttClient.publish(la_caldera_logger_t,DatatoPublish.c_str(),false); //retain set to false
+      #ifdef MQTT_DEBUGGING
+        mqttClient.publish("debugging",DatatoPublish.c_str(),false); //retain set to false
+      #endif
       Serial.println("publishing this data:" + DatatoPublish + "into topic:");
       Serial.print(la_caldera_logger_t);
     }
@@ -331,6 +340,9 @@ void firebase_config(void)
   fbdo.setBSSLBufferSize(2048, 512);
   fbdo.setResponseSize(2048);
   loadConfigFromFirebase();
+  //reset session
+  String activeSessionPath = "/benches/" + String(clave_disp) + "/activeSession";
+  Firebase.setString(fbdo, activeSessionPath, "null");
 }
 
 void mqtt_connect() 
@@ -345,8 +357,12 @@ void mqtt_connect()
 
       mqttClient.subscribe(la_caldera_logger_t);
 
-      
-    } else {
+      #ifdef MQTT_DEBUGGING
+        mqttClient.subscribe("debugging");
+      #endif
+    
+    } 
+    else {
       Serial.print("MQTT connection failed, response code=");
       Serial.print(mqttClient.state());
       Serial.println("trying again...");
