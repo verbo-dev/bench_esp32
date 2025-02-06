@@ -149,7 +149,7 @@ void setup() {
     if(NO_WIFI_MODE == false)
     {
       mqttClient.setServer(server, port);
-      mqttClient.setKeepAlive((BIGQUERY_PUBLISHING_t / 2)+10); // +10 just to have a gap for the keepalive
+      mqttClient.setKeepAlive(30); // +10 just to have a gap for the keepalive
       mqttClient.setCallback(callback);
       #ifdef BIGQ_DEBUGGING
         Serial.println("DEBUG:MQTT connection parameters ");
