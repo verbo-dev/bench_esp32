@@ -22,8 +22,8 @@ you can define multiple FEATURE_DEBUGGING macros*/
 #include <Adafruit_INA219.h>
 
 // --- wi fi connection ----
-#define WIFI_SSID "Totalplay-A4AF"
-#define WIFI_PASSWORD "A4AF1555X5gFgtAR"
+#define WIFI_SSID "Totalplay-F4A4"
+#define WIFI_PASSWORD "Lamadrid8"
 //wifi backup
 #define WIFI_SSID_backup "TP LINK ARRIBA"
 #define WIFI_PASSWORD_backup "Lamadrid8"
