@@ -6,7 +6,7 @@ you can define multiple FEATURE_DEBUGGING macros*/
 //#define POLLnCHARGE_DEBUGGING //Poll submits monitoring and charge control
 //#define VOLTAGE_DEBUGGING //voltage and sensor processing
 //#define BIGQ_DEBUGGING //sensor data publishing
-#define MQTT_DEBUGGING //publish data in a debug topic to debug remotely
+//#define MQTT_DEBUGGING //publish data in a debug topic to debug remotely
 
 
 #include <Arduino.h>
