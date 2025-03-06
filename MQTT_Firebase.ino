@@ -6,7 +6,7 @@ you can define multiple FEATURE_DEBUGGING macros*/
 //#define POLLnCHARGE_DEBUGGING //Poll submits monitoring and charge control
 //#define VOLTAGE_DEBUGGING //voltage and sensor processing
 //#define BIGQ_DEBUGGING //sensor data publishing
-#define MQTT_DEBUGGING //publish data in a debug topic to debug remotely
+//#define MQTT_DEBUGGING //publish data in a debug topic to debug remotely
 
 
 #include <Arduino.h>
@@ -22,11 +22,11 @@ you can define multiple FEATURE_DEBUGGING macros*/
 #include <Adafruit_INA219.h>
 
 // --- wi fi connection ----
-#define WIFI_SSID "Totalplay-A4AF"
-#define WIFI_PASSWORD "A4AF1555X5gFgtAR"
+#define WIFI_SSID "INFINITUMEDA2_2.4"
+#define WIFI_PASSWORD "5JRCfA5n5Z"
 //wifi backup
-#define WIFI_SSID_backup "TP LINK ARRIBA"
-#define WIFI_PASSWORD_backup "Lamadrid8"
+#define WIFI_SSID_backup "INFINITUMEDA2_5"
+#define WIFI_PASSWORD_backup "5JRCfA5n5Z"
 WiFiClient esp32Client; //object for MQTT
 bool wifi_begin(void);
 bool NO_WIFI_MODE = false;
@@ -50,7 +50,7 @@ void firebase_config(void);
 PubSubClient mqttClient(esp32Client);
 #define server "34.66.172.243" //remote google computer server
 #define port 1883
-const char * la_caldera_logger_t = "la_caldera/Bench1";
+const char * topic_mqtt = "la_caldera/Bench2";
 void mqtt_connect(void);
 void callback(char*, byte*, unsigned int);
 
@@ -74,7 +74,7 @@ void ping_Fb(void);
 // ----- general timers -----------
 #define NO_WIFI_MODE_ACTIVATION_t 83 // NO_WIFI_MODE_ACTIVATION = NO_WIFI_MODE_ACTIVATION_t * internal function delay
 #define BIGQUERY_PUBLISHING_t 720 //BIGQUERY_PUBLISHING = BIGQUERY_PUBLISHING_t (in seconds) / global void loop delay (in seconds)
-uint8_t USER_NOT_CHARGING_TIMEOUT_t = 0; //USER_NOT_CHARGING_TIMEOUT = USER_NOT_CHARGING_TIMEOUT_t * global void loop delay
+uint8_t USER_NOT_CHARGING_TIMEOUT_t = 255; //USER_NOT_CHARGING_TIMEOUT = USER_NOT_CHARGING_TIMEOUT_t * global void loop delay
 #define GLOBAL_VOID_LOOP_DELAY 500 //ms 
 
 
@@ -98,7 +98,7 @@ float filtering(float);
 
 float voltage_measuring(uint8_t);
 float current_calculation(void);
-#define NO_USERS_CHARGING_THRESHOLDVAL 300.0
+#define NO_USERS_CHARGING_THRESHOLDVAL 400.0
 uint8_t user_not_charging_timeout = USER_NOT_CHARGING_TIMEOUT_t;
 bool restart_voltage_filtering = false;
 float vpanel_avg[VOLTAGE_AVG_SIZE];
@@ -106,7 +106,7 @@ float vbattery_avg[VOLTAGE_AVG_SIZE];
 uint8_t vmeasurements_counter = 0;
 
 // ----- sensor data publishing variables -------------
-#define clave_disp 01
+#define clave_disp 02
 // - date related variables - 
 //server works with UDP protocol
 WiFiUDP ntpUDP;
@@ -162,7 +162,7 @@ void setup() {
   #endif
   // initialize digital pin GPIO18 as an output.
   pinMode(RELAY_PIN, OUTPUT);
-  digitalWrite(RELAY_PIN, LOW); //turn off the chargers
+  digitalWrite(RELAY_PIN, HIGH); //turn off the chargers
   //for sensor data publishing to calculate date and time
   timeClient.begin();
   timeClient.setTimeOffset(-21600); //para llegar a una zona horaria GMT-6
@@ -190,13 +190,13 @@ void loop() {
             Serial.println("DEBUG:writting a false to firebase and turning off chargers");
           #endif
           end_sessionFb(); 
-          digitalWrite(RELAY_PIN, LOW); //turn off the chargers
+          digitalWrite(RELAY_PIN, HIGH); //turn off the chargers
         }
         
       }
       else
       {
-        CargadorStatus = get_cargador_status(); //poll if the status changed from false
+        CargadorStatus = get_cargador_status(); //poll if the status changed from false in firebase
         #ifdef POLLnCHARGE_DEBUGGING
           Serial.println("DEBUG:checking if somebody wants to connect");
         #endif
@@ -206,16 +206,16 @@ void loop() {
             Serial.println("DEBUG:somebody just connected his phone");
           #endif
           user_charging = true; //for sensor data publishing to know that in this BIGQUERY_PUBLISHING time lapse somebody was connected
-          digitalWrite(RELAY_PIN, HIGH); //turn on the chargers
+          digitalWrite(RELAY_PIN, LOW); //turn on the chargers
         }
       }   
     }
     else //chargers will be always working if there is no internet, no firebase connection or firebase says that we are in developer mode
     {
-      digitalWrite(RELAY_PIN, HIGH); 
+      digitalWrite(RELAY_PIN, LOW); 
     }
   #else
-    digitalWrite(RELAY_PIN, HIGH);
+    digitalWrite(RELAY_PIN, LOW);
   #endif
 
   // --------------- VOLTAGE AND SENSOR PROCESSING ----------------------------
@@ -280,12 +280,12 @@ void loop() {
                             + "|" + usuario_cargando() + "|" + get_sID(); //added the last string for sesion id
 
       //publish in mqtt 
-      mqttClient.publish(la_caldera_logger_t,DatatoPublish.c_str(),false); //retain set to false
+      mqttClient.publish(topic_mqtt,DatatoPublish.c_str(),false); //retain set to false
       #ifdef MQTT_DEBUGGING
         mqttClient.publish("debugging",DatatoPublish.c_str(),false); //retain set to false
       #endif
       Serial.println("publishing this data:" + DatatoPublish + "into topic:");
-      Serial.print(la_caldera_logger_t);
+      Serial.print(topic_mqtt);
     }
     else if (NO_WIFI_MODE == true)
     {
@@ -373,7 +373,7 @@ void mqtt_connect()
                                                                         cloud remote computer) to recognize this device */
       Serial.println("MQTT connection successfull");
 
-      mqttClient.subscribe(la_caldera_logger_t);
+      mqttClient.subscribe(topic_mqtt);
 
       #ifdef MQTT_DEBUGGING
         mqttClient.subscribe("debugging");
