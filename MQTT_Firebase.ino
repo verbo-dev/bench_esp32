@@ -274,10 +274,11 @@ void loop() {
         //prepare variables to be published on mqtt
       String voltage_panel_filteredS = String(voltage_panel);
       String voltage_battery_filteredS = String(voltage_battery);
+      String currentS = String(current_calculation());
 
       String DatatoPublish = voltage_panel_filteredS + "|" + voltage_battery_filteredS + "|" + clave_disp \
                             + "|" + date_calculation() + "|" + time_calculation() + "|" + folio_calculation() \
-                            + "|" + usuario_cargando() + "|" + get_sID(); //added the last string for sesion id
+                            + "|" + usuario_cargando() + "|" + get_sID() + "|" + currentS; //added the last string for sesion id
 
       //publish in mqtt 
       mqttClient.publish(topic_mqtt,DatatoPublish.c_str(),false); //retain set to false
