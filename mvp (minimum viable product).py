@@ -1,6 +1,7 @@
 from google.cloud import pubsub_v1
 import paho.mqtt.client as mqtt
-from datetime import datetime, date, time
+from datetime import datetime
+import pytz
 from time import sleep
 import os
 import json
@@ -49,12 +50,12 @@ class mqtt_google:
             return None
         # Remove "-" characters from folio
         msg_array[5] = msg_array[5].replace("-", "")
+        datetimemexico = pytz.timezone("America/Mexico_City")
         msg_dictionary = {
             'voltaje_panel': float(msg_array[0]),
             'voltaje_bateria': float(msg_array[1]),
             'clave_disp': int(msg_array[2]),
-            'date': msg_array[3],
-            'time': msg_array[4],
+            'datetime': datetime.now(datetimemexico),
             'folio': int(msg_array[5]),
             'usuario_cargando': msg_array[6].lower() in ['true', '1', 'yes'],
             'id_sesion': msg_array[7],

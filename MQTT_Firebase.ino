@@ -3,7 +3,7 @@ define DEBUGGING_OFF if you want to test the whole program
 define "FEATURE"_DEBUGGING in order to just run a feature section in the program with some extra print lines
 you can define multiple FEATURE_DEBUGGING macros*/
 #define DEBUGGING_OFF
-//#define POLLnCHARGE_DEBUGGING //Poll submits monitoring and charge control
+#define POLLnCHARGE_DEBUGGING //Poll submits monitoring and charge control
 //#define VOLTAGE_DEBUGGING //voltage and sensor processing
 //#define BIGQ_DEBUGGING //sensor data publishing
 //#define MQTT_DEBUGGING //publish data in a debug topic to debug remotely
@@ -246,12 +246,14 @@ void loop() {
       #if defined(POLLnCHARGE_DEBUGGING) || defined(DEBUGGING_OFF)
         firebase_config();
       #endif
-      #if defined(BIGQ_DEBUGGING) || defined(DEBUGGING_OFF)
-      if (!mqttClient.connected())
-        mqtt_connect(); //this function will BLOCK the program if connection with google remote computer is not succesfull
-      #endif
     }
   }
+  #if defined(BIGQ_DEBUGGING) || defined(DEBUGGING_OFF)
+  if ((!mqttClient.connected()) && (NO_WIFI_MODE == false))
+    mqtt_connect(); //this function will BLOCK the program if connection with google remote computer is not succesfull
+  #endif
+
+
 
   // --------------- SENSOR DATA PUBLISHING --------------------------------------
   #if defined(BIGQ_DEBUGGING) || defined(DEBUGGING_OFF)
