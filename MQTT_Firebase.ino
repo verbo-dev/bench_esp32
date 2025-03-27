@@ -4,6 +4,7 @@ define "FEATURE"_DEBUGGING in order to just run a feature section in the program
 you can define multiple FEATURE_DEBUGGING macros*/
 #define DEBUGGING_OFF
 #define POLLnCHARGE_DEBUGGING //Poll submits monitoring and charge control
+#define TEMP_DEBUGGING
 //#define VOLTAGE_DEBUGGING //voltage and sensor processing
 //#define BIGQ_DEBUGGING //sensor data publishing
 //#define MQTT_DEBUGGING //publish data in a debug topic to debug remotely
@@ -73,7 +74,7 @@ void ping_Fb(void);
 
 // ----- general timers -----------
 #define NO_WIFI_MODE_ACTIVATION_t 83 // NO_WIFI_MODE_ACTIVATION = NO_WIFI_MODE_ACTIVATION_t * internal function delay
-#define BIGQUERY_PUBLISHING_t 720 //BIGQUERY_PUBLISHING = BIGQUERY_PUBLISHING_t (in seconds) / global void loop delay (in seconds)
+#define BIGQUERY_PUBLISHING_t 350 //BIGQUERY_PUBLISHING = BIGQUERY_PUBLISHING_t (in seconds) / global void loop delay (in seconds)
 uint8_t USER_NOT_CHARGING_TIMEOUT_t = 255; //USER_NOT_CHARGING_TIMEOUT = USER_NOT_CHARGING_TIMEOUT_t * global void loop delay
 #define GLOBAL_VOID_LOOP_DELAY 500 //ms 
 
@@ -104,6 +105,11 @@ bool restart_voltage_filtering = false;
 float vpanel_avg[VOLTAGE_AVG_SIZE];
 float vbattery_avg[VOLTAGE_AVG_SIZE];
 uint8_t vmeasurements_counter = 0;
+
+//------ temperature control variables -------------
+#define TEMPS_PIN 15
+#define FAN_PIN 16
+float temperature = 0.0;
 
 // ----- sensor data publishing variables -------------
 #define clave_disp 02
@@ -166,6 +172,11 @@ void setup() {
   //for sensor data publishing to calculate date and time
   timeClient.begin();
   timeClient.setTimeOffset(-21600); //para llegar a una zona horaria GMT-6
+
+  //temperature control pins
+  pinMode(TEMPS_PIN, INPUT);
+  pinMode(FAN_PIN, OUTPUT);
+  digitalWrite(FAN_PIN, HIGH); 
 
   //I2C communication with current sensor begins
   ina219.begin(); //pins 21 and 22 of ESP32 as default
@@ -237,6 +248,28 @@ void loop() {
     #endif
   #endif
 
+  //----------------- TEMPERATURE CONTROL ---------------------------------------
+  #if defined(TEMP_DEBUGGING) || defined(DEBUGGING_OFF)
+    temperature = analogRead(TEMPS_PIN) * (3.3/4095.0) *100.0;
+
+    if (temperature > 30.0) 
+    { // turn on the fan if the temperature increases
+      digitalWrite(outputPin, LOW); 
+      #ifdef TEMP_DEBUGGING
+        Serial.println("DEBUG:Turning fan ON");
+      #endif
+    } 
+    else 
+    {
+      digitalWrite(outputPin, HIGH);  // Turn off pin 16 otherwise
+      #ifdef TEMP_DEBUGGING
+        Serial.println("DEBUG:Turning fan OFF");
+      #endif
+    }
+
+  
+  #endif
+
     // --------------- WIFI TROUBLESHOOTING --------------------------------------
   if(WiFi.status() != WL_CONNECTED) //check if the connection to internet is still stable 
   {
@@ -277,10 +310,11 @@ void loop() {
       String voltage_panel_filteredS = String(voltage_panel);
       String voltage_battery_filteredS = String(voltage_battery);
       String currentS = String(current_calculation());
+      String temperatureS = String(temperature);
 
       String DatatoPublish = voltage_panel_filteredS + "|" + voltage_battery_filteredS + "|" + clave_disp \
                             + "|" + date_calculation() + "|" + time_calculation() + "|" + folio_calculation() \
-                            + "|" + usuario_cargando() + "|" + get_sID() + "|" + currentS; //added the last string for sesion id
+                            + "|" + usuario_cargando() + "|" + get_sID() + "|" + currentS + "|" + temperatureS; //added the last string for sesion id
 
       //publish in mqtt 
       mqttClient.publish(topic_mqtt,DatatoPublish.c_str(),false); //retain set to false

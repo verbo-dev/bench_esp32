@@ -44,8 +44,8 @@ class mqtt_google:
     def send_logger_data(self, msg):
         msg_array = msg.split('|')
         # Check if the length of msg_array is as expected
-        if len(msg_array) != 9:
-            print(f"Error: Expected 9 elements in msg_array, got {len(msg_array)}")
+        if len(msg_array) != 10:
+            print(f"Error: Expected 10 elements in msg_array, got {len(msg_array)}")
             return None
         # Remove "-" characters from folio
         msg_array[5] = msg_array[5].replace("-", "")
@@ -58,7 +58,8 @@ class mqtt_google:
             'folio': int(msg_array[5]),
             'usuario_cargando': msg_array[6].lower() in ['true', '1', 'yes'],
             'id_sesion': msg_array[7],
-            'current' : msg_array[8]
+            'current' : msg_array[8],
+            'temperature': msg_array[9]
         }
         return json.dumps(msg_dictionary).encode('utf-8')
 
