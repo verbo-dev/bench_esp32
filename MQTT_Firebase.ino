@@ -3,10 +3,10 @@ define DEBUGGING_OFF if you want to test the whole program
 define "FEATURE"_DEBUGGING in order to just run a feature section in the program with some extra print lines
 you can define multiple FEATURE_DEBUGGING macros*/
 #define DEBUGGING_OFF
-#define POLLnCHARGE_DEBUGGING //Poll submits monitoring and charge control
+//#define POLLnCHARGE_DEBUGGING //Poll submits monitoring and charge control
 #define TEMP_DEBUGGING
 //#define VOLTAGE_DEBUGGING //voltage and sensor processing
-//#define BIGQ_DEBUGGING //sensor data publishing
+#define BIGQ_DEBUGGING //sensor data publishing
 //#define MQTT_DEBUGGING //publish data in a debug topic to debug remotely
 
 
@@ -107,9 +107,10 @@ float vbattery_avg[VOLTAGE_AVG_SIZE];
 uint8_t vmeasurements_counter = 0;
 
 //------ temperature control variables -------------
-#define TEMPS_PIN 15
+const int TEMPS_PIN = 39;
 #define FAN_PIN 16
-float temperature = 0.0;
+int temperature_integer = 0;
+float temperature = 1.0;
 
 // ----- sensor data publishing variables -------------
 #define clave_disp 02
@@ -250,18 +251,24 @@ void loop() {
 
   //----------------- TEMPERATURE CONTROL ---------------------------------------
   #if defined(TEMP_DEBUGGING) || defined(DEBUGGING_OFF)
-    temperature = analogRead(TEMPS_PIN) * (3.3/4095.0) *100.0;
+    temperature_integer = analogRead(TEMPS_PIN);
+    temperature = temperature_integer * (3.3/4095.0) *100.0;
 
-    if (temperature > 30.0) 
+    #ifdef TEMP_DEBUGGING
+      Serial.print("Temperature: ");
+      Serial.print(temperature);
+      Serial.println(" °C");
+    #endif
+    if (temperature >= 30.0) 
     { // turn on the fan if the temperature increases
-      digitalWrite(outputPin, LOW); 
+      digitalWrite(FAN_PIN, LOW); 
       #ifdef TEMP_DEBUGGING
         Serial.println("DEBUG:Turning fan ON");
       #endif
     } 
     else 
     {
-      digitalWrite(outputPin, HIGH);  // Turn off pin 16 otherwise
+      digitalWrite(FAN_PIN, HIGH);  // Turn off pin 16 otherwise
       #ifdef TEMP_DEBUGGING
         Serial.println("DEBUG:Turning fan OFF");
       #endif
