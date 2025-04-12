@@ -2,10 +2,10 @@
 define DEBUGGING_OFF if you want to test the whole program
 define "FEATURE"_DEBUGGING in order to just run a feature section in the program with some extra print lines
 you can define multiple FEATURE_DEBUGGING macros*/
-#define DEBUGGING_OFF
+//#define DEBUGGING_OFF
 //#define POLLnCHARGE_DEBUGGING //Poll submits monitoring and charge control
-#define TEMP_DEBUGGING
-//#define VOLTAGE_DEBUGGING //voltage and sensor processing
+//#define TEMP_DEBUGGING
+#define VOLTAGE_DEBUGGING //voltage and sensor processing
 #define BIGQ_DEBUGGING //sensor data publishing
 //#define MQTT_DEBUGGING //publish data in a debug topic to debug remotely
 
@@ -21,6 +21,7 @@ you can define multiple FEATURE_DEBUGGING macros*/
 #include <TimeLib.h>
 //to interface the current sensor
 #include <Adafruit_INA219.h>
+#include <Wire.h>
 
 // --- wi fi connection ----
 #define WIFI_SSID "INFINITUMEDA2_2.4"
@@ -67,7 +68,8 @@ bool monitor_connection(void);
 void end_sessionFb(void);
 bool user_charging = false;
 //current sensor object
-Adafruit_INA219 ina219;
+Adafruit_INA219 ina219_1(0x44);
+Adafruit_INA219 ina219_2(0x40);
 void loadConfigFromFirebase(void);
 String currentSessionId = "";
 void ping_Fb(void);
@@ -180,7 +182,9 @@ void setup() {
   digitalWrite(FAN_PIN, HIGH); 
 
   //I2C communication with current sensor begins
-  ina219.begin(); //pins 21 and 22 of ESP32 as default
+  Wire.begin();
+  ina219_1.begin(); //pins 21 and 22 of ESP32 as default
+  ina219_2.begin();
 
 }
 
@@ -554,7 +558,7 @@ bool monitor_connection(void)
 
 float current_calculation(void)
 {
-  return ina219.getCurrent_mA();
+  return ina219_1.getCurrent_mA() + ina219_2.getCurrent_mA();
 }
 
 //let know firebase that there is no one charging and register the time when that user stopped charging
