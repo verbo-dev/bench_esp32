@@ -4,6 +4,7 @@
 // Current sensors library
 #include <Adafruit_INA219.h>
 #include <Wire.h>
+#define DEBUG
 
 Preferences nvmlib;
 Adafruit_INA219 ina219_1(0x44); // Address for the first module
@@ -37,10 +38,10 @@ void setup() {
     }
     Serial.println("INA219 (0x40) initialized");
 
-    CurrentActl1 = ina219_1.getCurrent_mA();
+    CurrentActl1 = abs(ina219_1.getCurrent_mA());
     CurrentLast1 = CurrentActl1;
 
-    CurrentActl2 = ina219_2.getCurrent_mA();
+    CurrentActl2 = abs(ina219_2.getCurrent_mA());
     CurrentLast2 = CurrentActl2;
 
     // ----------- NVM -----------------------
@@ -110,16 +111,22 @@ void loop() {
         }
     }
 
-    CurrentActl1 = ina219_1.getCurrent_mA();
-    CurrentActl2 = ina219_2.getCurrent_mA();
+    CurrentActl1 = abs(ina219_1.getCurrent_mA());
+    CurrentActl2 = abs(ina219_2.getCurrent_mA());
+    #ifdef DEBUG
+        Serial.print("DEBUG:current value 1 ");
+        Serial.println(CurrentActl1);
+        Serial.print("DEBUG:current value 2 ");
+        Serial.println(CurrentActl2);
+    #endif
 
     delay(500);
 }
 
 // Functions to detect connection/disconnection for each sensor
 bool SomebodyConnected(Adafruit_INA219 &sensor, float &currentLast) {
-    float currentActl = sensor.getCurrent_mA();
-    if ((currentActl - 500) >= currentLast) {
+    float currentActl = abs(sensor.getCurrent_mA());
+    if ((currentActl - 450) >= currentLast) {
         return true;
     } else {
         return false;
@@ -127,8 +134,8 @@ bool SomebodyConnected(Adafruit_INA219 &sensor, float &currentLast) {
 }
 
 bool SomebodyDisconnected(Adafruit_INA219 &sensor, float &currentLast) {
-    float currentActl = sensor.getCurrent_mA();
-    if ((currentActl + 500) <= currentLast) {
+    float currentActl = abs(sensor.getCurrent_mA());
+    if ((currentActl + 450) <= currentLast) {
         return true;
     } else {
         return false;
