@@ -59,14 +59,14 @@ void loop() {
     // Check for connections and updates for sensor 1
     if (SomebodyConnected(ina219_1, CurrentLast1)) {
         noiseCount1++;
-        if (noiseCount1 == 3) {
+        if (noiseCount1 == 8) {
             usersCount1++;
             nvmlib.putInt("usersCount1", usersCount1); // Update NVM
             CurrentLast1 = CurrentActl1;
         }
     } else if (SomebodyDisconnected(ina219_1, CurrentLast1)) {
         noiseCount1++;
-        if (noiseCount1 == 3) {
+        if (noiseCount1 == 8) {
             CurrentLast1 = CurrentActl1;
         }
     } else {
@@ -76,14 +76,14 @@ void loop() {
     // Check for connections and updates for sensor 2
     if (SomebodyConnected(ina219_2, CurrentLast2)) {
         noiseCount2++;
-        if (noiseCount2 == 3) {
+        if (noiseCount2 == 8) {
             usersCount2++;
             nvmlib.putInt("usersCount2", usersCount2); // Update NVM
             CurrentLast2 = CurrentActl2;
         }
     } else if (SomebodyDisconnected(ina219_2, CurrentLast2)) {
         noiseCount2++;
-        if (noiseCount2 == 3) {
+        if (noiseCount2 == 8) {
             CurrentLast2 = CurrentActl2;
         }
     } else {
@@ -120,13 +120,13 @@ void loop() {
         Serial.println(CurrentActl2);
     #endif
 
-    delay(500);
+    delay(1500);
 }
 
 // Functions to detect connection/disconnection for each sensor
 bool SomebodyConnected(Adafruit_INA219 &sensor, float &currentLast) {
     float currentActl = abs(sensor.getCurrent_mA());
-    if ((currentActl - 450) >= currentLast) {
+    if ((currentActl - 250) >= currentLast) {
         return true;
     } else {
         return false;
@@ -135,7 +135,7 @@ bool SomebodyConnected(Adafruit_INA219 &sensor, float &currentLast) {
 
 bool SomebodyDisconnected(Adafruit_INA219 &sensor, float &currentLast) {
     float currentActl = abs(sensor.getCurrent_mA());
-    if ((currentActl + 450) <= currentLast) {
+    if ((currentActl + 250) <= currentLast) {
         return true;
     } else {
         return false;
