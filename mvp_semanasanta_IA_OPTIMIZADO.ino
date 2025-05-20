@@ -23,8 +23,10 @@ int state2 = 0;
 
 int usersCount1 = 0;
 int usersCount2 = 0;
-int noiseCounter1 = 0;
-int noiseCounter2 = 0;
+int noiseCounter1i = 0; //"increment" noise counters (when current is going up)
+int noiseCounter2i = 0;
+int noiseCounter1d = 0;
+int noiseCounter2d = 0;
 
 void setup() {
   Serial.begin(115200);
@@ -71,21 +73,38 @@ void loop()
   // Estado sensor USB
   if (current1 < threshold1_1) 
   {
-      if (state1 != 0) Serial.println("[USB] Sin dispositivos conectados.");
-      state1 = 0;
+      if (state1 != 0) 
+      {
+        noiseCounter1d++;
+        if(noiseCounter1d == 5)
+        {
+            Serial.println("[USB] Sin dispositivos conectados.");
+            state1 = 0;
+        }
+      }
+      else
+      {
+        noiseCounter1d = 0;
+        noiseCounter1i = 0;
+      }
   } 
   
   else if (current1 < threshold1_2) 
   {
-    noiseCounter1++;
+    noiseCounter1i++;
     if(state1 == 2) //if current decremented just once
     {
-      state1 = 1; //we transition from 2 phones charging to just 1
-      Serial.println("[USB] 1 dispositivo conectado.");
+      noiseCounter1d++;
+      if(noiseCounter1d == 5) //if current decremented multiple times simultaneously
+      {
+        state1 = 1; //we transition from 2 phones charging to just 1
+        noiseCounter1i = 0;
+        Serial.println("[USB] 1 dispositivo conectado.");
+      }
     }
     else if (state1 == 0) 
     { //if current incremented 3 times
-      if(noiseCounter1 == 5)
+      if(noiseCounter1i == 5)
       {
         state1 = 1;
         usersCount1++;
@@ -95,17 +114,18 @@ void loop()
     }
     else 
     {
-      noiseCounter1 = 0; //we just confirm that it is in state 1 
+      noiseCounter1i = 0; //we just confirm that it is in state 1 
+      noiseCounter1d = 0;
     }
   }
 
  else //above threshold 2 (2 phones) 
  {
-    noiseCounter1++;
+    noiseCounter1i++;
     Serial.println("[USB] 2 dispositivos conectados.");
     if (state1 == 1) 
     {
-      if(noiseCounter1 == 5)
+      if(noiseCounter1i == 5)
       {
         state1 = 2;
         usersCount1++;
@@ -114,7 +134,8 @@ void loop()
     }
     else if(state1 == 2)
     {
-      noiseCounter2 == 0;
+      noiseCounter1i = 0;
+      noiseCounter1d = 0;
     }
   }
     
@@ -124,21 +145,38 @@ void loop()
   // Estado sensor Inalámbrico
   if (current2 < threshold2_1) 
   {
-      if (state2 != 0) Serial.println("[INAL] Sin dispositivos conectados.");
-      state2 = 0;
+      if (state2 != 0) 
+      {
+        noiseCounter2d++;
+        if(noiseCounter2d == 5)
+        {
+            Serial.println("[INAL] Sin dispositivos conectados.");
+            state2 = 0;
+        }
+      }
+      else
+      {
+        noiseCounter2d = 0;
+        noiseCounter2i = 0;
+      }
   } 
   
   else if (current2 < threshold2_2) 
   {
-    noiseCounter2++;
+    noiseCounter2i++;
     if(state2 == 2) //if current decremented just once
     {
+      noiseCounter2d++;
+      if(noiseCounter2d == 5) //if current decremented multiple times simultaneously
+      {
         state2 = 1; //we transition from 2 phones charging to just 1
+        noiseCounter2i = 0;
         Serial.println("[INAL] 1 dispositivo conectado.");
+      }
     }
     else if (state2 == 0) 
     { //if current incremented 3 times
-      if(noiseCounter2 == 5)
+      if(noiseCounter2i == 5)
       {
         state2 = 1;
         usersCount2++;
@@ -148,17 +186,18 @@ void loop()
     }
     else 
     {
-      noiseCounter2 = 0; //we just confirm that it is in state 1 
+      noiseCounter2i = 0; //we just confirm that it is in state 1 
+      noiseCounter2d = 0;
     }
   }
 
  else //above threshold 2 (2 phones) 
  {
-    noiseCounter2++;
+    noiseCounter2i++;
     Serial.println("[INAL] 2 dispositivos conectados.");
     if (state2 == 1) 
     {
-      if(noiseCounter2 == 5)
+      if(noiseCounter2i == 5)
       {
         state2 = 2;
         usersCount2++;
@@ -167,9 +206,11 @@ void loop()
     }
     else if(state2 == 2)
     {
-      noiseCounter2 == 0;
+      noiseCounter2i = 0;
+      noiseCounter2d = 0;
     }
   }
+    
 
   // Comandos por Serial
   if (Serial.available()) {
